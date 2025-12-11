@@ -170,9 +170,15 @@ export default function Landing() {
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <Button size="lg" variant="secondary" asChild>
-              <a href={getLoginUrl()}>Get Started Now</a>
-            </Button>
+            {getLoginUrl() ? (
+              <Button size="lg" variant="secondary" asChild>
+                <a href={getLoginUrl()}>Get Started Now</a>
+              </Button>
+            ) : (
+              <Button size="lg" variant="secondary" disabled title="OAuth not configured">
+                Get Started Now
+              </Button>
+            )}
           </CardContent>
         </Card>
       </section>
