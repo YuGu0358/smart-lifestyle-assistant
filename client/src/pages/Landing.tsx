@@ -54,9 +54,15 @@ export default function Landing() {
             <img src={APP_LOGO} alt={APP_TITLE} className="h-10 w-10" />
             <h1 className="text-2xl font-bold text-foreground">{APP_TITLE}</h1>
           </div>
-          <Button asChild>
-            <a href={getLoginUrl()}>Get Started</a>
-          </Button>
+          {getLoginUrl() ? (
+            <Button asChild>
+              <a href={getLoginUrl()}>Get Started</a>
+            </Button>
+          ) : (
+            <Button disabled title="OAuth not configured">
+              Get Started
+            </Button>
+          )}
         </div>
       </header>
 
@@ -74,9 +80,15 @@ export default function Landing() {
             Balance academics, health, and personal well-being with an AI assistant that understands your unique student life. From meal planning to commute optimization, we've got you covered.
           </p>
           <div className="flex gap-4 justify-center">
-            <Button size="lg" asChild>
-              <a href={getLoginUrl()}>Start Free</a>
-            </Button>
+            {getLoginUrl() ? (
+              <Button size="lg" asChild>
+                <a href={getLoginUrl()}>Start Free</a>
+              </Button>
+            ) : (
+              <Button size="lg" disabled title="OAuth not configured">
+                Start Free
+              </Button>
+            )}
             <Button size="lg" variant="outline">
               Learn More
             </Button>
