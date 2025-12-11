@@ -3,6 +3,18 @@
 
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Single Page Apps for GitHub Pages
+      // https://github.com/rafgraph/spa-github-pages
+      // Check for redirect from 404.html
+      (function() {
+        var redirect = sessionStorage.getItem('redirect');
+        if (redirect) {
+          sessionStorage.removeItem('redirect');
+          history.replaceState(null, null, redirect);
+        }
+      })();
+    </script>
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1" />
