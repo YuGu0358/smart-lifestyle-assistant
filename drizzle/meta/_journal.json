@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1763750114526,
+      "tag": "0000_old_karen_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1763750189588,
+      "tag": "0001_deep_tag",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1763751778498,
+      "tag": "0002_solid_warstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1763998187207,
+      "tag": "0003_aspiring_stranger",
+      "breakpoints": true
+    }
+  ]
+}
