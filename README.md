@@ -53,15 +53,24 @@ pnpm start
 
 ## 🌐 Deployment
 
-This project is automatically deployed to GitHub Pages using GitHub Actions.
+### Deploy to Vercel (Recommended)
 
-### Live Demo
-Visit: [https://yuguang0358.github.io/smart-lifestyle-assistant/](https://yuguang0358.github.io/smart-lifestyle-assistant/)
+This is a full-stack application that requires a backend server and database. Deploy to Vercel for the complete experience:
 
-### Deployment Process
-1. Push changes to the `main` branch
-2. GitHub Actions automatically builds the project
-3. The built files are deployed to GitHub Pages
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YuGu0358/smart-lifestyle-assistant)
+
+**Quick Start:**
+1. Click the button above
+2. Configure environment variables (database, OAuth)
+3. Deploy!
+
+See [QUICK_DEPLOY.md](./QUICK_DEPLOY.md) for detailed instructions.
+
+### GitHub Pages (Frontend Only)
+
+A static frontend version is automatically deployed to GitHub Pages:
+- URL: [https://yugu0358.github.io/smart-lifestyle-assistant/](https://yugu0358.github.io/smart-lifestyle-assistant/)
+- Note: Backend features (API, authentication, database) are not available in this version
 
 ## 📝 License
 
