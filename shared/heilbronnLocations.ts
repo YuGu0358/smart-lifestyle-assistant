@@ -72,6 +72,11 @@ export function getBuildingFromRoom(room: string): HeilbronnBuilding | null {
     return HEILBRONN_BUILDINGS.weipertstrasse;
   }
 
+  // Rooms starting with 'L' → Etzelstraße (same building)
+  if (trimmedRoom.startsWith("L")) {
+    return HEILBRONN_BUILDINGS.etzelstrasse;
+  }
+
   return null;
 }
 

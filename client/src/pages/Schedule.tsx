@@ -5,9 +5,48 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Calendar, FileUp, MapPin, Upload, ExternalLink } from "lucide-react";
+import { Calendar, FileUp, MapPin, Upload, ExternalLink, Navigation } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+
+// Heilbronn building addresses mapping
+const HEILBRONN_ADDRESSES: Record<string, string> = {
+  // Rooms starting with digits or L → Etzelstraße
+  'etzelstrasse': 'Etzelstraße 38, 74076 Heilbronn, Germany',
+  // Rooms starting with D → Bildungscampus
+  'bildungscampus': 'Bildungscampus 2, 74076 Heilbronn, Germany',
+  // Rooms starting with C → Weipertstraße
+  'weipertstrasse': 'Weipertstraße 8-10, 74076 Heilbronn, Germany',
+};
+
+function getHeilbronnAddress(location: string): string | null {
+  if (!location) return null;
+  
+  // Extract room code from location (e.g., "L.1.11" from "L.1.11, Seminarraum (1902.01.111)")
+  const roomMatch = location.match(/^([A-Z]\.[\d.]+|\d+(?:\.\d+)*)/i);
+  const roomCode = roomMatch ? roomMatch[1].toUpperCase() : '';
+  
+  // Check room prefix
+  if (/^\d/.test(roomCode) || roomCode.startsWith('L')) {
+    return HEILBRONN_ADDRESSES.etzelstrasse;
+  }
+  if (roomCode.startsWith('D')) {
+    return HEILBRONN_ADDRESSES.bildungscampus;
+  }
+  if (roomCode.startsWith('C')) {
+    return HEILBRONN_ADDRESSES.weipertstrasse;
+  }
+  
+  // Check for Heilbronn building codes in parentheses
+  if (location.includes('1901.') || location.includes('1902.')) {
+    return HEILBRONN_ADDRESSES.bildungscampus;
+  }
+  if (location.includes('1910.') || location.includes('1915.')) {
+    return HEILBRONN_ADDRESSES.weipertstrasse;
+  }
+  
+  return null;
+}
 
 export default function Schedule() {
   const [file, setFile] = useState<File | null>(null);
@@ -15,6 +54,7 @@ export default function Schedule() {
     courseName: string;
     location: string;
     buildingName?: string;
+    fullAddress?: string;
   } | null>(null);
   
   const { data: courses, refetch } = trpc.courses.list.useQuery();
@@ -54,16 +94,26 @@ export default function Schedule() {
       toast.error("No location available for this course");
       return;
     }
+    
+    // Try to get Heilbronn address first
+    const heilbronnAddress = getHeilbronnAddress(course.location);
+    
     setSelectedCourse({
       courseName: course.courseName,
       location: course.location,
       buildingName: course.buildingName || undefined,
+      fullAddress: heilbronnAddress || undefined,
     });
   };
 
-  const openInGoogleMaps = (location: string) => {
-    const query = encodeURIComponent(location);
+  const openInGoogleMaps = (address: string) => {
+    const query = encodeURIComponent(address);
     window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+  };
+
+  const openDirections = (address: string) => {
+    const destination = encodeURIComponent(address);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}`, '_blank');
   };
 
   const groupedCourses = courses?.reduce((acc, course) => {
@@ -74,6 +124,14 @@ export default function Schedule() {
     acc[date].push(course);
     return acc;
   }, {} as Record<string, typeof courses>);
+
+  // Get the address to use for map display
+  const getMapAddress = () => {
+    if (selectedCourse?.fullAddress) {
+      return selectedCourse.fullAddress;
+    }
+    return selectedCourse?.location + ', Germany';
+  };
 
   return (
     <DashboardLayout>
@@ -231,11 +289,16 @@ export default function Schedule() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="bg-muted p-4 rounded-lg">
-              <p className="font-medium">Location</p>
+              <p className="font-medium">Room</p>
               <p className="text-muted-foreground">{selectedCourse?.location}</p>
               {selectedCourse?.buildingName && (
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-sm text-primary mt-1">
                   Building: {selectedCourse.buildingName}
+                </p>
+              )}
+              {selectedCourse?.fullAddress && (
+                <p className="text-sm font-medium text-green-600 mt-2">
+                  📍 {selectedCourse.fullAddress}
                 </p>
               )}
             </div>
@@ -250,7 +313,7 @@ export default function Schedule() {
                   loading="lazy"
                   allowFullScreen
                   referrerPolicy="no-referrer-when-downgrade"
-                  src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(selectedCourse.location + ', Germany')}`}
+                  src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(getMapAddress())}`}
                 />
               </div>
             )}
@@ -258,18 +321,27 @@ export default function Schedule() {
             <div className="flex gap-2">
               <Button 
                 className="flex-1"
-                onClick={() => selectedCourse && openInGoogleMaps(selectedCourse.location)}
+                onClick={() => selectedCourse && openInGoogleMaps(getMapAddress())}
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
-                Open in Google Maps
+                Open in Maps
               </Button>
               <Button 
-                variant="outline"
-                onClick={() => setSelectedCourse(null)}
+                variant="secondary"
+                className="flex-1"
+                onClick={() => selectedCourse && openDirections(getMapAddress())}
               >
-                Close
+                <Navigation className="h-4 w-4 mr-2" />
+                Get Directions
               </Button>
             </div>
+            <Button 
+              variant="outline"
+              className="w-full"
+              onClick={() => setSelectedCourse(null)}
+            >
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

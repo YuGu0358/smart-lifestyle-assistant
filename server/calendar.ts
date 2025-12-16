@@ -1,5 +1,5 @@
 import ical from "node-ical";
-import { getClassroomAddress, getBuildingFromRoom, extractRoomFromLocation } from "../shared/heilbronnLocations";
+import { getClassroomAddress, getBuildingFromRoom, extractRoomFromLocation, HEILBRONN_BUILDINGS } from "../shared/heilbronnLocations";
 
 /**
  * iCalendar (.ics) Parser for TUM Course Schedules
@@ -12,6 +12,7 @@ export interface ParsedCourse {
   location?: string;
   buildingName?: string;
   roomNumber?: string;
+  fullAddress?: string;
   startTime: Date;
   endTime: Date;
   recurrenceRule?: string;
@@ -42,21 +43,46 @@ export async function parseICalendar(icsContent: string): Promise<ParsedCourse[]
         const courseCode = codeMatch ? codeMatch[1] : undefined;
 
         // Parse building and room
-        // First try Heilbronn format (C.0.50, D.2.01, 1.234)
+        // First try Heilbronn format (C.0.50, D.2.01, 1.234, L.1.11)
         const roomNumber = extractRoomFromLocation(location) || undefined;
         const heilbronnBuilding = roomNumber ? getBuildingFromRoom(roomNumber) : null;
         
         let buildingName = heilbronnBuilding?.name;
+        let fullAddress = heilbronnBuilding?.fullAddress;
+        
+        // Also check for L prefix (maps to Etzelstraße)
+        if (!buildingName && roomNumber?.toUpperCase().startsWith('L')) {
+          buildingName = HEILBRONN_BUILDINGS.etzelstrasse.name;
+          fullAddress = HEILBRONN_BUILDINGS.etzelstrasse.fullAddress;
+        }
         
         // Fallback to TUM format if not Heilbronn
         if (!buildingName) {
           const tumRoomMatch = location.match(/(?:MI|MW|CH|PH)\s*(?:HS\s*)?\d+/i);
           const tumBuildingMatch = location.match(/(Garching|Innenstadt|Weihenstephan|Klinikum)/i);
-          buildingName = tumBuildingMatch ? tumBuildingMatch[1] : undefined;
           
-          // Check for Heilbronn campus indicators
-          if (!buildingName && (location.includes('Heilbronn') || location.includes('1910') || location.includes('1915') || location.includes('1901') || location.includes('1902'))) {
-            buildingName = "Heilbronn Campus";
+          if (tumBuildingMatch) {
+            buildingName = tumBuildingMatch[1];
+            const tumBuilding = TUM_BUILDINGS[buildingName] || Object.values(TUM_BUILDINGS).find(b => b.name.includes(buildingName!));
+            fullAddress = tumBuilding?.address;
+          }
+          
+          // Check for Heilbronn campus indicators from TUM room codes
+          if (!buildingName) {
+            // Room codes like (1910.EG.050C) indicate Heilbronn
+            const heilbronnCodeMatch = location.match(/\(19(?:01|02|10|15)\./);
+            if (heilbronnCodeMatch) {
+              const code = heilbronnCodeMatch[0];
+              if (code.includes('1901') || code.includes('1902')) {
+                // D building - Bildungscampus
+                buildingName = HEILBRONN_BUILDINGS.bildungscampus.name;
+                fullAddress = HEILBRONN_BUILDINGS.bildungscampus.fullAddress;
+              } else if (code.includes('1910') || code.includes('1915')) {
+                // C building - Weipertstraße
+                buildingName = HEILBRONN_BUILDINGS.weipertstrasse.name;
+                fullAddress = HEILBRONN_BUILDINGS.weipertstrasse.fullAddress;
+              }
+            }
           }
         }
 
@@ -66,6 +92,7 @@ export async function parseICalendar(icsContent: string): Promise<ParsedCourse[]
           location: location || undefined,
           buildingName,
           roomNumber,
+          fullAddress,
           startTime: new Date(event.start),
           endTime: new Date(event.end),
           recurrenceRule: event.rrule?.toString(),
@@ -129,6 +156,26 @@ export const TUM_BUILDINGS: Record<
     lng: 11.5693,
     address: "Theresienstraße 90, 80333 München",
   },
+  
+  // Heilbronn Campus
+  Etzelstraße: {
+    name: "Etzelstraße Campus",
+    lat: 49.1427,
+    lng: 9.2181,
+    address: "Etzelstraße 38, 74076 Heilbronn",
+  },
+  Bildungscampus: {
+    name: "Bildungscampus",
+    lat: 49.1419,
+    lng: 9.2144,
+    address: "Bildungscampus 2, 74076 Heilbronn",
+  },
+  Weipertstraße: {
+    name: "Weipertstraße Campus",
+    lat: 49.1398,
+    lng: 9.2203,
+    address: "Weipertstraße 8-10, 74076 Heilbronn",
+  },
 };
 
 /**
@@ -136,13 +183,60 @@ export const TUM_BUILDINGS: Record<
  */
 export function getBuildingLocation(
   location: string
-): { lat: number; lng: number; name: string } | null {
+): { lat: number; lng: number; name: string; address: string } | null {
+  // First check Heilbronn buildings
+  const roomNumber = extractRoomFromLocation(location);
+  if (roomNumber) {
+    const heilbronnBuilding = getBuildingFromRoom(roomNumber);
+    if (heilbronnBuilding?.coordinates) {
+      return {
+        lat: heilbronnBuilding.coordinates.lat,
+        lng: heilbronnBuilding.coordinates.lng,
+        name: heilbronnBuilding.name,
+        address: heilbronnBuilding.fullAddress,
+      };
+    }
+    
+    // Check L prefix (Etzelstraße)
+    if (roomNumber.toUpperCase().startsWith('L')) {
+      return {
+        lat: HEILBRONN_BUILDINGS.etzelstrasse.coordinates!.lat,
+        lng: HEILBRONN_BUILDINGS.etzelstrasse.coordinates!.lng,
+        name: HEILBRONN_BUILDINGS.etzelstrasse.name,
+        address: HEILBRONN_BUILDINGS.etzelstrasse.fullAddress,
+      };
+    }
+  }
+  
+  // Check for Heilbronn room codes in parentheses
+  const heilbronnCodeMatch = location.match(/\(19(?:01|02|10|15)\./);
+  if (heilbronnCodeMatch) {
+    const code = heilbronnCodeMatch[0];
+    if (code.includes('1901') || code.includes('1902')) {
+      return {
+        lat: HEILBRONN_BUILDINGS.bildungscampus.coordinates!.lat,
+        lng: HEILBRONN_BUILDINGS.bildungscampus.coordinates!.lng,
+        name: HEILBRONN_BUILDINGS.bildungscampus.name,
+        address: HEILBRONN_BUILDINGS.bildungscampus.fullAddress,
+      };
+    } else if (code.includes('1910') || code.includes('1915')) {
+      return {
+        lat: HEILBRONN_BUILDINGS.weipertstrasse.coordinates!.lat,
+        lng: HEILBRONN_BUILDINGS.weipertstrasse.coordinates!.lng,
+        name: HEILBRONN_BUILDINGS.weipertstrasse.name,
+        address: HEILBRONN_BUILDINGS.weipertstrasse.fullAddress,
+      };
+    }
+  }
+
+  // Check TUM buildings
   for (const [code, building] of Object.entries(TUM_BUILDINGS)) {
     if (location.includes(code)) {
       return {
         lat: building.lat,
         lng: building.lng,
         name: building.name,
+        address: building.address,
       };
     }
   }
@@ -153,6 +247,7 @@ export function getBuildingLocation(
       lat: 48.2649,
       lng: 11.6703,
       name: "TUM Garching Campus",
+      address: "Boltzmannstraße, 85748 Garching",
     };
   }
 
