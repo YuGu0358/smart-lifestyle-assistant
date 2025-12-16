@@ -222,7 +222,7 @@ export const appRouter = router({
   // AI Chat
   chat: router({
     send: protectedProcedure.input((val: unknown) => val as { message: string; context?: any }).mutation(async ({ ctx, input }) => {
-      const { getUserConversations, insertConversation } = await import("./db");
+      const { getUserConversations, insertConversation, getWellnessProfile, getUserCourses, getFocusMode } = await import("./db");
       const { chatWithGemini } = await import("./gemini");
       
       // Get conversation history
@@ -232,6 +232,54 @@ export const appRouter = router({
         parts: [{ text: h.content }],
       }));
       
+      // Get user context for more personalized responses
+      const [wellnessProfile, courses, focusMode] = await Promise.all([
+        getWellnessProfile(ctx.user.id),
+        getUserCourses(ctx.user.id),
+        getFocusMode(ctx.user.id),
+      ]);
+      
+      // Build user context string
+      const now = new Date();
+      const todaysCourses = courses.filter(c => {
+        const courseDate = new Date(c.startTime);
+        return courseDate.toDateString() === now.toDateString();
+      });
+      
+      let userContext = `\n\n## Current User Context (${now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} ${now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })})`;
+      
+      if (ctx.user.name) {
+        userContext += `\n- User Name: ${ctx.user.name}`;
+      }
+      
+      if (focusMode) {
+        userContext += `\n- Current Focus Mode: ${focusMode.currentMode}`;
+      }
+      
+      if (wellnessProfile) {
+        userContext += `\n- Daily Calorie Goal: ${wellnessProfile.dailyCalorieGoal || 'Not set'}`;
+        userContext += `\n- Budget Goal: ${wellnessProfile.budgetGoal ? `€${(wellnessProfile.budgetGoal / 100).toFixed(2)}` : 'Not set'}`;
+        if (wellnessProfile.dietaryRestrictions) {
+          try {
+            const restrictions = JSON.parse(wellnessProfile.dietaryRestrictions);
+            if (restrictions.length > 0) {
+              userContext += `\n- Dietary Restrictions: ${restrictions.join(', ')}`;
+            }
+          } catch (e) {}
+        }
+      }
+      
+      if (todaysCourses.length > 0) {
+        userContext += `\n- Today's Classes:`;
+        todaysCourses.forEach(c => {
+          const start = new Date(c.startTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+          const end = new Date(c.endTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+          userContext += `\n  - ${c.courseName}: ${start}-${end}${c.location ? ` at ${c.location}` : ''}`;
+        });
+      } else {
+        userContext += `\n- No classes scheduled for today`;
+      }
+      
       // Save user message
       await insertConversation({
         userId: ctx.user.id,
@@ -240,8 +288,35 @@ export const appRouter = router({
         context: input.context ? JSON.stringify(input.context) : null,
       });
       
-      // Get AI response
-      const systemPrompt = `You are a smart lifestyle assistant for TUM students. You help with meal planning, commute optimization, and time management. Be friendly, practical, and proactive.`;
+      // Get AI response with enhanced system prompt
+      const systemPrompt = `You are an intelligent AI life coach specifically designed for TUM (Technical University of Munich) students. Your name is "TUM Life Assistant".
+
+## Your Core Capabilities:
+1. **Meal Planning**: Recommend dishes from TUM Mensas (canteens) based on nutritional goals, budget, dietary restrictions, and schedule
+2. **Commute Optimization**: Help plan routes using Munich's MVV public transport system, considering class schedules and walking times
+3. **Time Management**: Optimize daily schedules balancing study, health, and social activities
+4. **Academic Support**: Provide study tips, exam preparation strategies, and productivity advice
+
+## Your Personality:
+- Friendly, supportive, and encouraging
+- Practical and action-oriented - always give specific, actionable advice
+- Proactive - anticipate needs and offer suggestions
+- Culturally aware of German university life and Munich
+
+## Response Guidelines:
+- Keep responses concise but comprehensive (2-4 paragraphs max unless detailed info requested)
+- Use bullet points for lists and recommendations
+- Include specific numbers, times, or locations when relevant
+- Ask clarifying questions when needed to give better advice
+- Reference Munich-specific information (MVV lines, TUM buildings, local Mensas)
+- Be encouraging about student challenges like exam stress or time management
+
+## Context Awareness:
+- Remember previous conversation context
+- Connect different aspects of student life (e.g., suggest quick meals before exams)
+- Consider time of day, day of week, and semester period in recommendations
+
+Always respond in the same language the user uses. If they write in German, respond in German. If in English, respond in English.` + userContext;
       const response = await chatWithGemini(systemPrompt, input.message, geminiHistory);
       
       // Save assistant response
@@ -255,7 +330,9 @@ export const appRouter = router({
     }),
     history: protectedProcedure.query(async ({ ctx }) => {
       const { getUserConversations } = await import("./db");
-      return getUserConversations(ctx.user.id, 50);
+      const conversations = await getUserConversations(ctx.user.id, 50);
+      // Reverse to show oldest first (chronological order)
+      return conversations.reverse();
     }),
   }),
 
