@@ -1,4 +1,4 @@
-import * as ical from "node-ical";
+import ical from "node-ical";
 import { getClassroomAddress, getBuildingFromRoom, extractRoomFromLocation } from "../shared/heilbronnLocations";
 
 /**
@@ -26,7 +26,8 @@ export async function parseICalendar(icsContent: string): Promise<ParsedCourse[]
   const courses: ParsedCourse[] = [];
 
   try {
-    const parsedData = await ical.async.parseICS(icsContent);
+    // Use sync parsing which is more reliable in ESM context
+    const parsedData = ical.sync.parseICS(icsContent);
 
     for (const key in parsedData) {
       const event = parsedData[key];
@@ -36,8 +37,8 @@ export async function parseICalendar(icsContent: string): Promise<ParsedCourse[]
         const courseName = event.summary || "Untitled Course";
         const location = event.location || "";
 
-        // Extract course code (e.g., "IN2345 - Database Systems")
-        const codeMatch = courseName.match(/^([A-Z]{2}\d{4})/);
+        // Extract course code (e.g., "IN2345 - Database Systems" or "INHN0001")
+        const codeMatch = courseName.match(/\(([A-Z]{2,}[A-Z0-9]+)\)/) || courseName.match(/^([A-Z]{2}\d{4})/);
         const courseCode = codeMatch ? codeMatch[1] : undefined;
 
         // Parse building and room
@@ -52,6 +53,11 @@ export async function parseICalendar(icsContent: string): Promise<ParsedCourse[]
           const tumRoomMatch = location.match(/(?:MI|MW|CH|PH)\s*(?:HS\s*)?\d+/i);
           const tumBuildingMatch = location.match(/(Garching|Innenstadt|Weihenstephan|Klinikum)/i);
           buildingName = tumBuildingMatch ? tumBuildingMatch[1] : undefined;
+          
+          // Check for Heilbronn campus indicators
+          if (!buildingName && (location.includes('Heilbronn') || location.includes('1910') || location.includes('1915') || location.includes('1901') || location.includes('1902'))) {
+            buildingName = "Heilbronn Campus";
+          }
         }
 
         courses.push({
