@@ -3,13 +3,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Calendar, FileUp, MapPin, Upload } from "lucide-react";
+import { Calendar, FileUp, MapPin, Upload, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Schedule() {
   const [file, setFile] = useState<File | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<{
+    courseName: string;
+    location: string;
+    buildingName?: string;
+  } | null>(null);
+  
   const { data: courses, refetch } = trpc.courses.list.useQuery();
   const importMutation = trpc.courses.import.useMutation({
     onSuccess: (data) => {
@@ -40,6 +47,23 @@ export default function Schedule() {
       importMutation.mutate({ icsContent: content });
     };
     reader.readAsText(file);
+  };
+
+  const handleViewOnMap = (course: { courseName: string; location?: string | null; buildingName?: string | null }) => {
+    if (!course.location) {
+      toast.error("No location available for this course");
+      return;
+    }
+    setSelectedCourse({
+      courseName: course.courseName,
+      location: course.location,
+      buildingName: course.buildingName || undefined,
+    });
+  };
+
+  const openInGoogleMaps = (location: string) => {
+    const query = encodeURIComponent(location);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
   };
 
   const groupedCourses = courses?.reduce((acc, course) => {
@@ -165,7 +189,13 @@ export default function Schedule() {
                                   </p>
                                 )}
                               </div>
-                              <Button variant="outline" size="sm">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleViewOnMap(course)}
+                                disabled={!course.location}
+                              >
+                                <MapPin className="h-4 w-4 mr-1" />
                                 View on Map
                               </Button>
                             </div>
@@ -189,6 +219,60 @@ export default function Schedule() {
           )}
         </div>
       </div>
+
+      {/* Map Dialog */}
+      <Dialog open={!!selectedCourse} onOpenChange={() => setSelectedCourse(null)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              {selectedCourse?.courseName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-muted p-4 rounded-lg">
+              <p className="font-medium">Location</p>
+              <p className="text-muted-foreground">{selectedCourse?.location}</p>
+              {selectedCourse?.buildingName && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Building: {selectedCourse.buildingName}
+                </p>
+              )}
+            </div>
+            
+            {/* Embedded Google Maps */}
+            {selectedCourse?.location && (
+              <div className="aspect-video w-full rounded-lg overflow-hidden border">
+                <iframe
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  allowFullScreen
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(selectedCourse.location + ', Germany')}`}
+                />
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button 
+                className="flex-1"
+                onClick={() => selectedCourse && openInGoogleMaps(selectedCourse.location)}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open in Google Maps
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => setSelectedCourse(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
