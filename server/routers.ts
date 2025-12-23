@@ -67,6 +67,29 @@ export const appRouter = router({
       
       return { success: true, count: parsedCourses.length };
     }),
+    analyzeDifficulty: protectedProcedure
+      .input((val: unknown) => val as { courseCode: string; courseName: string })
+      .mutation(async ({ input }) => {
+        const { analyzeCourseDifficulty } = await import("./courseDifficultyAnalysis");
+        return analyzeCourseDifficulty(input.courseCode, input.courseName);
+      }),
+    analyzeAllCourses: protectedProcedure.query(async ({ ctx }) => {
+      const { getUserCourses } = await import("./db");
+      const { batchAnalyzeCourses, calculateTotalStudyLoad } = await import("./courseDifficultyAnalysis");
+      
+      const courses = await getUserCourses(ctx.user.id);
+      const uniqueCourses = Array.from(
+        new Map(courses.map(c => [c.courseName, { courseCode: c.courseCode || "", courseName: c.courseName }])).values()
+      );
+      
+      const difficulties = await batchAnalyzeCourses(uniqueCourses);
+      const studyLoad = calculateTotalStudyLoad(difficulties);
+      
+      return {
+        difficulties,
+        studyLoad,
+      };
+    }),
   }),
 
   // Meal Management
@@ -288,8 +311,12 @@ export const appRouter = router({
         context: input.context ? JSON.stringify(input.context) : null,
       });
       
-      // Get AI response with enhanced system prompt
-      const systemPrompt = `You are an intelligent AI life coach specifically designed for TUM (Technical University of Munich) students. Your name is "TUM Life Assistant".
+      // Get Mode-specific system prompt
+      const { getModeSystemPrompt } = await import("./focusModeConfig");
+      const modePrompt = currentMode ? getModeSystemPrompt(currentMode as any) : "";
+      
+      // Get AI response with Mode-differentiated system prompt
+      const basePrompt = `You are an intelligent AI life coach specifically designed for TUM (Technical University of Munich) students. Your name is "TUM Life Assistant".
 
 ## Your Core Capabilities:
 1. **Meal Planning**: Recommend dishes from TUM Mensas (canteens) based on nutritional goals, budget, dietary restrictions, and schedule
@@ -297,26 +324,11 @@ export const appRouter = router({
 3. **Time Management**: Optimize daily schedules balancing study, health, and social activities
 4. **Academic Support**: Provide study tips, exam preparation strategies, and productivity advice
 
-## Your Personality:
-- Friendly, supportive, and encouraging
-- Practical and action-oriented - always give specific, actionable advice
-- Proactive - anticipate needs and offer suggestions
-- Culturally aware of German university life and Munich
-
-## Response Guidelines:
-- Keep responses concise but comprehensive (2-4 paragraphs max unless detailed info requested)
-- Use bullet points for lists and recommendations
-- Include specific numbers, times, or locations when relevant
-- Ask clarifying questions when needed to give better advice
-- Reference Munich-specific information (MVV lines, TUM buildings, local Mensas)
-- Be encouraging about student challenges like exam stress or time management
-
-## Context Awareness:
-- Remember previous conversation context
-- Connect different aspects of student life (e.g., suggest quick meals before exams)
-- Consider time of day, day of week, and semester period in recommendations
-
-Always respond in the same language the user uses. If they write in German, respond in German. If in English, respond in English.` + userContext;
+Always respond in the same language the user uses. If they write in German, respond in German. If in English, respond in English.`;
+      
+      const systemPrompt = modePrompt 
+        ? `${basePrompt}\n\n## CURRENT FOCUS MODE: ${currentMode}\n${modePrompt}\n\n## User Context:${userContext}`
+        : `${basePrompt}\n\n## User Context:${userContext}`;
       const response = await chatWithGemini(systemPrompt, input.message, geminiHistory);
       
       // Save assistant response
