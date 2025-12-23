@@ -1,0 +1,47 @@
+{
+  "name": "Smart Lifestyle Assistant",
+  "short_name": "TUM Life",
+  "description": "AI-powered lifestyle assistant for TUM students - meal planning, commute optimization, and time management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["education", "lifestyle", "productivity"],
+  "shortcuts": [
+    {
+      "name": "AI Coach",
+      "short_name": "Coach",
+      "description": "Chat with your AI life coach",
+      "url": "/ai-coach",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Meal Planner",
+      "short_name": "Meals",
+      "description": "Get meal recommendations",
+      "url": "/meal-planner",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Schedule",
+      "short_name": "Schedule",
+      "description": "View your class schedule",
+      "url": "/schedule",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}
