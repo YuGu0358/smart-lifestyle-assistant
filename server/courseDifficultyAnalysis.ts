@@ -23,7 +23,7 @@ export interface CourseDifficulty {
 /**
  * Analyze course difficulty using AI
  */
-export async function analyzeCourse Difficulty(
+export async function analyzeCourseDifficulty(
   courseCode: string,
   courseName: string
 ): Promise<CourseDifficulty> {
