@@ -124,6 +124,8 @@ interface MapViewProps {
   initialCenter?: google.maps.LatLngLiteral;
   initialZoom?: number;
   onMapReady?: (map: google.maps.Map) => void;
+  showUserLocation?: boolean; // Enable real-time user location
+  centerOnUserLocation?: boolean; // Auto-center map on user location
 }
 
 export function MapView({
@@ -131,9 +133,13 @@ export function MapView({
   initialCenter = { lat: 48.1351, lng: 11.5820 }, // Munich center as default
   initialZoom = 12,
   onMapReady,
+  showUserLocation = true,
+  centerOnUserLocation = false,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
+  const userLocationMarker = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
+  const watchId = useRef<number | null>(null);
 
   const init = usePersistFn(async () => {
     if (!API_KEY) {
@@ -160,6 +166,12 @@ export function MapView({
         streetViewControl: true,
         mapId: "DEMO_MAP_ID",
       });
+      
+      // Initialize user location tracking
+      if (showUserLocation) {
+        startLocationTracking();
+      }
+      
       if (onMapReady) {
         onMapReady(map.current);
       }
@@ -168,8 +180,82 @@ export function MapView({
     }
   });
 
+  const startLocationTracking = usePersistFn(() => {
+    if (!navigator.geolocation) {
+      console.warn("Geolocation is not supported by this browser.");
+      return;
+    }
+
+    // Request user location
+    watchId.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const userPos = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+
+        if (!map.current || !window.google) return;
+
+        // Create or update user location marker
+        if (!userLocationMarker.current) {
+          // Create custom marker element
+          const markerElement = document.createElement('div');
+          markerElement.style.width = '20px';
+          markerElement.style.height = '20px';
+          markerElement.style.borderRadius = '50%';
+          markerElement.style.backgroundColor = '#4285F4';
+          markerElement.style.border = '3px solid white';
+          markerElement.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+
+          userLocationMarker.current = new window.google.maps.marker.AdvancedMarkerElement({
+            map: map.current,
+            position: userPos,
+            content: markerElement,
+            title: "Your Location",
+          });
+
+          // Center map on user location on first load
+          if (centerOnUserLocation) {
+            map.current.setCenter(userPos);
+            map.current.setZoom(15);
+          }
+        } else {
+          // Update marker position
+          userLocationMarker.current.position = userPos;
+        }
+      },
+      (error) => {
+        console.error("Error getting user location:", error.message);
+        // Handle different error cases
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            console.warn("User denied location permission");
+            break;
+          case error.POSITION_UNAVAILABLE:
+            console.warn("Location information unavailable");
+            break;
+          case error.TIMEOUT:
+            console.warn("Location request timed out");
+            break;
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  });
+
   useEffect(() => {
     init();
+    
+    // Cleanup: stop watching location when component unmounts
+    return () => {
+      if (watchId.current !== null) {
+        navigator.geolocation.clearWatch(watchId.current);
+      }
+    };
   }, [init]);
 
   return (

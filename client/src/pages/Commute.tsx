@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
 import { TUM_CAMPUSES, type TUMLocation } from "@shared/tumLocations";
 import { HEILBRONN_BUILDINGS } from "@shared/heilbronnLocations";
-import { Bus, Clock, Home, MapPin, Navigation, Sparkles } from "lucide-react";
+import { Bus, Clock, Home, MapPin, Navigation, Sparkles, LocateFixed } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ export default function Commute() {
     lng: 11.6679,
   }); // TUM Garching
   const [arrivalTime, setArrivalTime] = useState("");
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   const planMutation = trpc.commutes.plan.useMutation({
     onError: (error) => {
@@ -127,6 +128,56 @@ export default function Commute() {
     map.fitBounds(bounds);
   }, []);
 
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setIsGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userPos = {
+          name: "My Current Location",
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setFrom(userPos);
+        
+        // Center map on user location
+        if (mapRef.current) {
+          mapRef.current.setCenter({ lat: userPos.lat, lng: userPos.lng });
+          mapRef.current.setZoom(15);
+        }
+        
+        toast.success("Location set to your current position");
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+        let errorMessage = "Failed to get your location";
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location permission denied. Please enable location access.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information unavailable.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out.";
+            break;
+        }
+        toast.error(errorMessage);
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
+
   const handleTUMLocationSelect = (locationId: string, isDestination: boolean) => {
     // Check if it's a Heilbronn building
     if (locationId.startsWith('heilbronn-')) {
@@ -220,7 +271,11 @@ export default function Commute() {
         <Card className="overflow-hidden">
           <CardContent className="p-0">
             <div className="h-[400px] w-full">
-              <MapView onMapReady={handleMapReady} />
+              <MapView 
+                onMapReady={handleMapReady} 
+                showUserLocation={true}
+                centerOnUserLocation={false}
+              />
             </div>
           </CardContent>
         </Card>
@@ -300,6 +355,15 @@ export default function Commute() {
               />
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handleUseCurrentLocation}
+                disabled={isGettingLocation}
+                className="flex-1"
+              >
+                <LocateFixed className="h-4 w-4 mr-2" />
+                {isGettingLocation ? "Getting Location..." : "Use My Location"}
+              </Button>
               {profile?.homeAddress && (
                 <Button
                   variant="outline"
